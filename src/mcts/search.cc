@@ -588,6 +588,7 @@ void Search::SendMovesStats() const REQUIRES(counters_mutex_) {
     uci_responder_->OutputThinkingInfo(&infos);
   } else {
     LOGFILE << "=== Move stats:";
+    LOGFILE << "Helloworld:";
     for (const auto& line : move_stats) LOGFILE << line;
   }
   for (auto& edge : root_node_->Edges()) {
