@@ -67,6 +67,7 @@ class SearchParams {
   }
   bool GetTwoFoldDraws() const { return kTwoFoldDraws; }
   float GetTemperature() const { return options_.Get<float>(kTemperatureId); }
+  int GetScLimit() const { return options_.Get<int>(kScLimitId); }
   float GetTemperatureVisitOffset() const {
     return options_.Get<float>(kTemperatureVisitOffsetId);
   }
@@ -175,6 +176,7 @@ class SearchParams {
   static const OptionId kRootHasOwnCpuctParamsId;
   static const OptionId kTwoFoldDrawsId;
   static const OptionId kTemperatureId;
+  static const OptionId kScLimitId;
   static const OptionId kTempDecayMovesId;
   static const OptionId kTempDecayDelayMovesId;
   static const OptionId kTemperatureCutoffMoveId;

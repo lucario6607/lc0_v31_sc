@@ -223,6 +223,10 @@ const OptionId SearchParams::kTemperatureId{
     "Tau value from softmax formula for the first move. If equal to 0, the "
     "engine picks the best move to make. Larger values increase randomness "
     "while making the move."};
+const OptionId SearchParams::kScLimitId{
+    "search-contempt-node-limit", "ScLimit",
+    "UCT until this number of nodes"
+    "thompson sampling beyond this limit."};
 const OptionId SearchParams::kTempDecayMovesId{
     "tempdecay-moves", "TempDecayMoves",
     "Reduce temperature for every move after the first move, decreasing "
@@ -503,6 +507,7 @@ void SearchParams::Populate(OptionsParser* options) {
   options->Add<BoolOption>(kRootHasOwnCpuctParamsId) = false;
   options->Add<BoolOption>(kTwoFoldDrawsId) = true;
   options->Add<FloatOption>(kTemperatureId, 0.0f, 100.0f) = 0.0f;
+  options->Add<IntOption>(kScLimitId, 1, 1000000000) = 1000000000;
   options->Add<IntOption>(kTempDecayMovesId, 0, 640) = 0;
   options->Add<IntOption>(kTempDecayDelayMovesId, 0, 100) = 0;
   options->Add<IntOption>(kTemperatureCutoffMoveId, 0, 1000) = 0;
