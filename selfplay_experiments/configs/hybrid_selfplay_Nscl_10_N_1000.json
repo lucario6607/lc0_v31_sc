@@ -1,0 +1,27 @@
+{
+    "lc0_path_white": "../build/release/lc0pro",
+    "lc0_path_black": "../build/release/lc0pro",
+    "white_net": "768x15x24h-t82-swa-7464000.pb.gz",
+    "black_net": "768x15x24h-t82-swa-7464000.pb.gz",
+    "num_games": 100,
+    "pgn_file_name": "hybrid_selfplay_Nscl_10_N_1000.pgn",
+    "use_opening_book": false,
+    "opening_book": "queen500.epd",
+    "use_dropbox_upload": false,
+    "engine1_options": {
+        "WeightsFile": "white_net",
+        "Temperature": "0.7",
+        "TempEndgame": "0.1",
+        "TempDecayMoves": "5",
+	"ScLimit": "10"
+    },
+    "engine2_options": {
+        "WeightsFile": "black_net",
+        "Temperature": "0.7",
+        "TempDecayMoves": "5",
+        "TempEndgame": "0.1",
+	"ScLimit": "10"
+    },
+    "depth_limit_w": 1000,
+    "depth_limit_b": 1000
+}
