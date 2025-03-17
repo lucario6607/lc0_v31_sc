@@ -54,7 +54,9 @@ Step4: Download the neural network from the following link and place it in the "
 [https://storage.lczero.org/files/768x15x24h-t82-swa-7464000.pb.gz](https://storage.lczero.org/files/768x15x24h-t82-swa-7464000.pb.gz)
 
 Step5: Run the following:
+
 cd selfplay_experiments
+
 ./run_tests.sh
 
 Note: Either run each experiment one by one, or modify the "run_tests.sh" script to remove "progress.json" after each experiment to run all the experiments simultaneously.
