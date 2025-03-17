@@ -1,10 +1,13 @@
 # Search-contempt implementation of Leela Chess Zero
 
-This is branched from [v31](https://github.com/LeelaChessZero/lc0/tree/release/0.31) version of Leela Chess Zero (lc0). It implements search-contempt which is a hybrid mcts algorithm that combines the standard puct search (used in alphazero and now in lc0) and thompson sampling. Details of the search algorithm are in the discussions in the [Leela Chess Zero discord](https://discord.com/invite/pKujYxD) server, which can be easily found by searching for the term "search-contempt-node-limit".
+This is branched from [v31](https://github.com/LeelaChessZero/lc0/tree/release/0.31) version of Leela Chess Zero (lc0). It implements search-contempt which is a hybrid mcts algorithm that combines the standard puct search (used in alphazero and now in lc0) and thompson sampling. Details of the search algorithm are provided in the writeup in the link below,
 
-This hybrid version of mcts has been proven to gain significant strength in odds chess, a form of handicap chess where the stronger player plays with a piece less (for example a queen, rook or knight less) than that of the opponent.
+[https://github.com/amjshl/compute_efficient_alphazero](https://github.com/amjshl/compute_efficient_alphazero)
 
-This branch works best with specialized nets trained for playing odds chess. For example, one instance of config file settings where the search-contempt does really well for queen odds games is below.
+
+## Running Odds Chess
+
+This hybrid version of mcts has been proven to gain significant strength in odds chess, a form of handicap chess where the stronger player plays with a piece less (for example a queen, rook or knight less) than that of the opponent. For example, one instance of config file settings where the search-contempt does really well for queen odds games is below.
 
 UCI parameters for gui (on top of default parameters for lc0)
 
@@ -34,6 +37,27 @@ The reason that the hybrid mcts does not suffer from this effect is that by free
 For the history on the progress over the years of the odds bots from Leela Chess Zero refer to the blogpost below.
 
 [https://lczero.org/blog/](https://lczero.org/blog/)
+
+## Reproducing the Selfplay experiments referenced in the compute_efficient_alphazero writeup
+
+This script is directly cloned and modified from a [script](https://github.com/notune/LeelaQueenOdds/blob/main/training/generate_games.py) by Noah from Leela Chess Zero discord server
+
+Step1: compile/build this version of lc0 using the same instructions as that of the link below
+[https://github.com/LeelaChessZero/lc0/tree/release/0.31](https://github.com/LeelaChessZero/lc0/tree/release/0.31)
+
+Step2: The build/release directory created will contain an executable which is "lc0". make an identical copy of this executable but rename it to "lc0pro" and place it in the same folder as the original "lc0"
+
+Step3: Install the necessary dependencies as instructed in the link below so that python chess is installed
+[https://github.com/notune/LeelaQueenOdds](https://github.com/notune/LeelaQueenOdds)
+
+Step4: Download the neural network from the following link and place it in the "selfplay_experiments" directory:
+[https://storage.lczero.org/files/768x15x24h-t82-swa-7464000.pb.gz](https://storage.lczero.org/files/768x15x24h-t82-swa-7464000.pb.gz)
+
+Step5: Run the following:
+cd selfplay_experiments
+./run_tests.sh
+
+Note: Either run each experiment one by one, or modify the "run_tests.sh" script to remove "progress.json" after each experiment to run all the experiments simultaneously.
 
 ## Acknowledgements:
 
