@@ -5,7 +5,6 @@ image:
 - Visual Studio 2017
 environment:
   matrix:
-  - NAME: cpu-dnnl
   - NAME: onnx-dml
   - NAME: android
 for:
