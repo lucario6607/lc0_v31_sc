@@ -1792,109 +1792,228 @@ void SearchWorker::PickNodesToExtendTask(
 
       if (is_opponent_node && node_limit_frozen ) {
 
-	       while (node_limit_frozen_lock) {
-                     node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
-	       }
+        // HYBRID SAMPLING: This branch handles opponent nodes where the policy has been frozen
+        // after Nscl visits. We now use a hybrid of Thompson Sampling (from the
+        // frozen policy) and standard PUCT search to maintain some dynamism.
 
-	       std::mt19937_64 rng;
-               uint64_t timeSeed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-               std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed>>32)};
-               rng.seed(ss);
-               std::uniform_real_distribution<double> unif(0, 1);
-               node->CopyPolicy_frozen(max_needed, current_cumulative_pol_frozen.data());
-	       int visited_num_nodes = int(node->GetVisitedNumberOfEdges());
-	       std::array<int,256> tmp_visit_array;
-	       for (int i=0; i<visited_num_nodes; i++) {
-		       tmp_visit_array[i] = 0;
-	       }
-	       for (int i=0; i<cur_limit; i++) {
-		double currentRandomNumber = unif(rng);
-		float search_value = currentRandomNumber;
-		int number;
-		number = find_index(current_cumulative_pol_frozen, visited_num_nodes, search_value);
-		int b = number;
-		number = b;
-		tmp_visit_array[number] = tmp_visit_array[number] + 1;
-	       }
+        // HYBRID SAMPLING: Set the ratio. 0.8 means 80% TS, 20% PUCT.
+        // This could be made a configurable parameter.
+        const float hybrid_ratio = 0.8f;
+        int ts_visits = static_cast<int>(std::round(static_cast<float>(cur_limit) * hybrid_ratio));
+        int puct_visits = cur_limit - ts_visits;
 
-	       cur_limit=0;
+        // --- Part 1: Thompson Sampling visits ---
+        if (ts_visits > 0) {
+           while (node_limit_frozen_lock) {
+                         node_limit_frozen_lock = node->GetNodeLimitFrozenLock();
+           }
 
-	       int cache_filled_idx = -1;
-               for (int i=0; i<visited_num_nodes; i++) {
-                       bool can_exit = false;
-                       best_edge.Reset();
+           std::mt19937_64 rng;
+                   uint64_t timeSeed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+                   std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed>>32)};
+                   rng.seed(ss);
+                   std::uniform_real_distribution<double> unif(0, 1);
+                   node->CopyPolicy_frozen(max_needed, current_cumulative_pol_frozen.data());
+           int visited_num_nodes = int(node->GetVisitedNumberOfEdges());
+           std::array<int,256> tmp_visit_array;
+           for (int i=0; i<visited_num_nodes; i++) {
+               tmp_visit_array[i] = 0;
+           }
+           for (int i=0; i<ts_visits; i++) {
+            double currentRandomNumber = unif(rng);
+            float search_value = currentRandomNumber;
+            int number;
+            number = find_index(current_cumulative_pol_frozen, visited_num_nodes, search_value);
+            int b = number;
+            number = b;
+            tmp_visit_array[number] = tmp_visit_array[number] + 1;
+           }
 
-                       if (i > cache_filled_idx) {
-                         if (i == 0) {
-                           cur_iters[i] = node->Edges();
-                         } else {
-                           cur_iters[i] = cur_iters[i - 1];
-                           ++cur_iters[i];
-                         }
-                         current_nstarted[i] = cur_iters[i].GetNStarted();
-                       }
+           int cache_filled_idx = -1;
+                   for (int i=0; i<visited_num_nodes; i++) {
+                           bool can_exit = false;
+                           best_edge.Reset();
 
-                       if (i > cache_filled_idx) {
-                         cache_filled_idx++;
-                       }		       
+                           if (i > cache_filled_idx) {
+                             if (i == 0) {
+                               cur_iters[i] = node->Edges();
+                             } else {
+                               cur_iters[i] = cur_iters[i - 1];
+                               ++cur_iters[i];
+                             }
+                             current_nstarted[i] = cur_iters[i].GetNStarted();
+                           }
+
+                           if (i > cache_filled_idx) {
+                             cache_filled_idx++;
+                           }		       
 
 
-		       int new_visits = tmp_visit_array[i];
-		       best_edge = cur_iters[i];
+               int new_visits = tmp_visit_array[i];
+               best_edge = cur_iters[i];
 
-		       if (can_exit) break;
+               if (can_exit) break;
 
 
-		       new_visits = tmp_visit_array[i];
+               new_visits = tmp_visit_array[i];
 
-		       if (new_visits > 0) {
+               if (new_visits > 0) {
 
-                       if (i >= vtp_last_filled.back()) {
-                         auto* vtp_array = visits_to_perform.back().get()->data();
-                         std::fill(vtp_array + (vtp_last_filled.back() + 1),
-                                   vtp_array + i + 1, 0);
-                       }
-                       (*visits_to_perform.back())[i] += new_visits;
-                       Node* child_node = best_edge.GetOrSpawnNode(/* parent */ node);
-               
-                       // Probably best place to check for two-fold draws consistently.
-                       // Depth starts with 1 at root, so real depth is depth - 1.
-                       EnsureNodeTwoFoldCorrectForDepth(
-                           child_node, current_path.size() + base_depth + 1 - 1);		       
+                           if (i >= vtp_last_filled.back()) {
+                             auto* vtp_array = visits_to_perform.back().get()->data();
+                             std::fill(vtp_array + (vtp_last_filled.back() + 1),
+                                       vtp_array + i + 1, 0);
+                           }
+                           (*visits_to_perform.back())[i] += new_visits;
+                           Node* child_node = best_edge.GetOrSpawnNode(/* parent */ node);
+                   
+                           // Probably best place to check for two-fold draws consistently.
+                           // Depth starts with 1 at root, so real depth is depth - 1.
+                           EnsureNodeTwoFoldCorrectForDepth(
+                               child_node, current_path.size() + base_depth + 1 - 1);		       
 
-                       bool decremented = false;
+                           bool decremented = false;
 
-                       if (child_node->TryStartScoreUpdate()) {
-                         current_nstarted[i]++;
-                         new_visits -= 1;
-                         decremented = true;
-                         if (child_node->GetN() > 0 && !child_node->IsTerminal()) {
-                           child_node->IncrementNInFlight(new_visits);
-                           current_nstarted[i] += new_visits;
-                         }
-                       }
+                           if (child_node->TryStartScoreUpdate()) {
+                             current_nstarted[i]++;
+                             new_visits -= 1;
+                             decremented = true;
+                             if (child_node->GetN() > 0 && !child_node->IsTerminal()) {
+                               child_node->IncrementNInFlight(new_visits);
+                               current_nstarted[i] += new_visits;
+                             }
+                           }
 
-                       if ((decremented &&
-                            (child_node->GetN() == 0 || child_node->IsTerminal()))) {
-                         // Reduce 1 for the visits_to_perform to ensure the collision created
-                         // doesn't include this visit.
-                         (*visits_to_perform.back())[i] -= 1;
-                         receiver->push_back(NodeToProcess::Visit(
-                             child_node,
-                             static_cast<uint16_t>(current_path.size() + 1 + base_depth)));
-                         completed_visits++;
-                         receiver->back().moves_to_visit.reserve(moves_to_path.size() + 1);
-                         receiver->back().moves_to_visit = moves_to_path;
-                         receiver->back().moves_to_visit.push_back(best_edge.GetMove());
-                       }
+                           if ((decremented &&
+                                (child_node->GetN() == 0 || child_node->IsTerminal()))) {
+                             // Reduce 1 for the visits_to_perform to ensure the collision created
+                             // doesn't include this visit.
+                             (*visits_to_perform.back())[i] -= 1;
+                             receiver->push_back(NodeToProcess::Visit(
+                                 child_node,
+                                 static_cast<uint16_t>(current_path.size() + 1 + base_depth)));
+                             completed_visits++;
+                             receiver->back().moves_to_visit.reserve(moves_to_path.size() + 1);
+                             receiver->back().moves_to_visit = moves_to_path;
+                             receiver->back().moves_to_visit.push_back(best_edge.GetMove());
+                           }
 
-                       if (i > vtp_last_filled.back() &&
-                           (*visits_to_perform.back())[i] > 0) {
-                         vtp_last_filled.back() = i;
-                       }
-		       }		       
-	       }	       
+                           if (i > vtp_last_filled.back() &&
+                               (*visits_to_perform.back())[i] > 0) {
+                             vtp_last_filled.back() = i;
+                           }
+               }		       
+           }
+        }
 
+        // --- Part 2: PUCT visits ---
+        if (puct_visits > 0) {
+            // HYBRID SAMPLING: This is the standard PUCT logic, copied from the 'else'
+            // block below, but operating on the remaining `puct_visits`.
+            m_evaluator.SetParent(node);
+            float visited_pol = 0.0f;
+            for (Node* child : node->VisitedNodes()) {
+                int index = child->Index();
+                visited_pol += current_pol[index];
+                float q = child->GetQ(draw_score);
+                current_util[index] = q + m_evaluator.GetMUtility(child, q);
+            }
+            const float fpu =
+                GetFpu(params_, node, is_root_node, draw_score, visited_pol);
+            for (int i = 0; i < max_needed; i++) {
+                if (current_util[i] == std::numeric_limits<float>::lowest()) {
+                current_util[i] = fpu + m_evaluator.GetDefaultMUtility();
+                }
+            }
+
+            const float cpuct = ComputeCpuct(params_, node->GetN(), is_root_node);
+            const float puct_mult =
+                cpuct * std::sqrt(std::max(node->GetChildrenVisits(), 1u));
+            int cache_filled_idx = -1;
+
+            int current_puct_limit = puct_visits; // Use a local limit
+            while (current_puct_limit > 0) {
+                float best = std::numeric_limits<float>::lowest();
+                int best_idx = -1;
+                float best_without_u = std::numeric_limits<float>::lowest();
+                float second_best = std::numeric_limits<float>::lowest();
+                bool can_exit = false;
+                best_edge.Reset();
+                for (int idx = 0; idx < max_needed; ++idx) {
+                    if (idx > cache_filled_idx) {
+                        if (idx == 0) { cur_iters[idx] = node->Edges(); } 
+                        else { cur_iters[idx] = cur_iters[idx - 1]; ++cur_iters[idx]; }
+                        current_nstarted[idx] = cur_iters[idx].GetNStarted();
+                    }
+                    int nstarted = current_nstarted[idx];
+                    const float util = current_util[idx];
+                    if (idx > cache_filled_idx) {
+                        current_score[idx] = current_pol[idx] * puct_mult / (1 + nstarted) + util;
+                        cache_filled_idx++;
+                    }
+                    float score = current_score[idx];
+                    if (score > best) {
+                        second_best = best;
+                        second_best_edge = best_edge;
+                        best = score;
+                        best_idx = idx;
+                        best_without_u = util;
+                        best_edge = cur_iters[idx];
+                    } else if (score > second_best) {
+                        second_best = score;
+                        second_best_edge = cur_iters[idx];
+                    }
+                    if (can_exit) break;
+                    if (nstarted == 0) { can_exit = true; }
+                }
+                int new_visits = 0;
+                if (second_best_edge) {
+                    int estimated_visits_to_change_best = std::numeric_limits<int>::max();
+                    if (best_without_u < second_best) {
+                        const auto n1 = current_nstarted[best_idx] + 1;
+                        estimated_visits_to_change_best = static_cast<int>(
+                            std::max(1.0f, std::min(current_pol[best_idx] * puct_mult / (second_best - best_without_u) - n1 + 1, 1e9f)));
+                    }
+                    second_best_edge.Reset();
+                    new_visits = std::min(current_puct_limit, estimated_visits_to_change_best);
+                } else {
+                    new_visits = current_puct_limit;
+                }
+                if (best_idx >= vtp_last_filled.back()) {
+                    auto* vtp_array = visits_to_perform.back().get()->data();
+                    std::fill(vtp_array + (vtp_last_filled.back() + 1), vtp_array + best_idx + 1, 0);
+                }
+                (*visits_to_perform.back())[best_idx] += new_visits;
+                current_puct_limit -= new_visits;
+                Node* child_node = best_edge.GetOrSpawnNode(node);
+                EnsureNodeTwoFoldCorrectForDepth(child_node, current_path.size() + base_depth + 1 - 1);
+                bool decremented = false;
+                if (child_node->TryStartScoreUpdate()) {
+                    current_nstarted[best_idx]++;
+                    new_visits -= 1;
+                    decremented = true;
+                    if (child_node->GetN() > 0 && !child_node->IsTerminal()) {
+                        child_node->IncrementNInFlight(new_visits);
+                        current_nstarted[best_idx] += new_visits;
+                    }
+                    current_score[best_idx] = current_pol[best_idx] * puct_mult / (1 + current_nstarted[best_idx]) + current_util[best_idx];
+                }
+                if ((decremented && (child_node->GetN() == 0 || child_node->IsTerminal()))) {
+                    (*visits_to_perform.back())[best_idx] -= 1;
+                    receiver->push_back(NodeToProcess::Visit(child_node, static_cast<uint16_t>(current_path.size() + 1 + base_depth)));
+                    completed_visits++;
+                    receiver->back().moves_to_visit.reserve(moves_to_path.size() + 1);
+                    receiver->back().moves_to_visit = moves_to_path;
+                    receiver->back().moves_to_visit.push_back(best_edge.GetMove());
+                }
+                if (best_idx > vtp_last_filled.back() && (*visits_to_perform.back())[best_idx] > 0) {
+                    vtp_last_filled.back() = best_idx;
+                }
+            }
+        }
+        // HYBRID SAMPLING: All visits for this node have been allocated.
+        cur_limit = 0;
+	       
       } else {
 
       m_evaluator.SetParent(node);
