@@ -1796,9 +1796,8 @@ void SearchWorker::PickNodesToExtendTask(
         // after Nscl visits. We now use a hybrid of Thompson Sampling (from the
         // frozen policy) and standard PUCT search to maintain some dynamism.
 
-        // HYBRID SAMPLING: Set the ratio. 0.8 means 80% TS, 20% PUCT.
-        // This could be made a configurable parameter.
-        const float hybrid_ratio = 0.8f;
+        // HYBRID SAMPLING: Get the ratio from UCI parameters.
+        const float hybrid_ratio = params_.GetHybridSamplingRatio();
         int ts_visits = static_cast<int>(std::round(static_cast<float>(cur_limit) * hybrid_ratio));
         int puct_visits = cur_limit - ts_visits;
 
